@@ -19,6 +19,8 @@ VECTOR_FEATURE_NAMES: List[str] = [
     "sequence_neighbour_vector_n_to_c",
     "sequence_neighbour_vector_c_to_n",
     "virtual_c_beta_vector",
+    "ca_to_n_vector",
+    "ca_to_c_vector"
 ]
 """Names of all vector features from the module."""
 
@@ -228,7 +230,7 @@ def add_sequence_neighbour_vector(
 
 
 def add_virtual_beta_carbon_vector(
-    g: nx.Graph, scale: bool = False, reverse: bool = False
+    g: nx.Graph, scale: bool = False, reverse: bool = False, whole_frame: bool = True
 ):
     """For each node adds a vector from alpha carbon to virtual beta carbon.
     :param g: Graph to add vector to.
@@ -249,22 +251,57 @@ def add_virtual_beta_carbon_vector(
 
     # Iterate over nodes and compute vector
     for n, d in g.nodes(data=True):
-        if any([n not in df.index for df in coord_dfs.values()]):
-            vec = np.array([0, 0, 0], dtype=float)
-            log.warning(f"Missing backbone atom in residue {n}.")
+
+        # Get residue atom coordinates
+        if n not in coord_dfs["CA"].index:
+            Ca = np.array([0, 0, 0], dtype=float)
+        else:
+            Ca = np.array(
+                coord_dfs["CA"].loc[n][["x_coord", "y_coord", "z_coord"]],
+                dtype=float,
+            )
+
+        if n not in coord_dfs["N"].index:
+            N = np.array([0, 0, 0], dtype=float)
+            if whole_frame:
+                d["ca_to_n_vector"] = np.array([0, 0, 0], dtype=float)
         else:
             N = np.array(
                 coord_dfs["N"].loc[n][["x_coord", "y_coord", "z_coord"]],
                 dtype=float,
             )
-            Ca = np.array(
-                coord_dfs["CA"].loc[n][["x_coord", "y_coord", "z_coord"]],
-                dtype=float,
-            )
+            if whole_frame:
+                d["ca_to_n_vector"] = Ca - N
+
+        if n not in coord_dfs["C"].index:
+            C = np.array([0, 0, 0], dtype=float)
+            if whole_frame:
+                d["ca_to_c_vector"] = np.array([0, 0, 0], dtype=float)
+        else:
             C = np.array(
                 coord_dfs["C"].loc[n][["x_coord", "y_coord", "z_coord"]],
                 dtype=float,
             )
+            if whole_frame:
+                d["ca_to_c_vector"] = C - Ca
+
+        # Calculate virtual beta-carbon
+        if any([n not in df.index for df in coord_dfs.values()]):
+            vec = np.array([0, 0, 0], dtype=float)
+            log.warning(f"Missing backbone atom in residue {n}.")
+        else:
+            # N = np.array(
+            #     coord_dfs["N"].loc[n][["x_coord", "y_coord", "z_coord"]],
+            #     dtype=float,
+            # )
+            # Ca = np.array(
+            #     coord_dfs["CA"].loc[n][["x_coord", "y_coord", "z_coord"]],
+            #     dtype=float,
+            # )
+            # C = np.array(
+            #     coord_dfs["C"].loc[n][["x_coord", "y_coord", "z_coord"]],
+            #     dtype=float,
+            # )
             b = Ca - N
             c = C - Ca
             a = np.cross(b, c)
